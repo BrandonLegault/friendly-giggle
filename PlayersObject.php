@@ -19,86 +19,31 @@
 
 
 interface IReadWritePlayers {
-    function readPlayers($source, $filename = null);
-    function writePlayer($source, $player, $filename = null);
+    function readPlayers($filename = null);
+    function writePlayer($player, $filename = null);
     function display($isCLI, $course, $filename = null);
 }
 
-class PlayersObject implements IReadWritePlayers {
+interface IRead {
+    function readPlayers( $filename = null);
+}
 
-    private $playersArray;
+interface IWrite {
+    function writePlayer( $player, $filename = null);
+}
 
-    private $playerJsonString;
+interface IDisplay {
+    function display($isCLI, $course, $filename = null);
+}
 
-    public function __construct() {
-        //We're only using this if we're storing players as an array.
-        $this->playersArray = [];
+class ArrayDataSource implements IRead, IWrite {
+    
+    private $playersArray = [];
 
-        //We'll only use this one if we're storing players as a JSON string
-        $this->playerJsonString = null;
-    }
+    function readPlayers( $filename = null)
+    {
 
-    /**
-     * @param $source string Where we're retrieving the data from. 'json', 'array' or 'file'
-     * @param $filename string Only used if we're reading players in 'file' mode.
-     * @return string json
-     */
-    function readPlayers($source, $filename = null) {
-        $playerData = null;
-
-        switch ($source) {
-            case 'array':
-                $playerData = $this->getPlayerDataArray();
-                break;
-            case 'json':
-                $playerData = $this->getPlayerDataJson();
-                break;
-            case 'file':
-                $playerData = $this->getPlayerDataFromFile($filename);
-                break;
-        }
-
-        if (is_string($playerData)) {
-            $playerData = json_decode($playerData);
-        }
-
-        return $playerData;
-
-    }
-
-    /**
-     * @param $source string Where to write the data. 'json', 'array' or 'file'
-     * @param $filename string Only used if we're writing in 'file' mode
-     * @param $player \stdClass Class implementation of the player with name, age, job, salary.
-     */
-    function writePlayer($source, $player, $filename = null) {
-        switch ($source) {
-            case 'array':
-                $this->playersArray[] = $player;
-                break;
-            case 'json':
-                $players = [];
-                if ($this->playerJsonString) {
-                    $players = json_decode($this->playerJsonString);
-                }
-                $players[] = $player;
-                $this->playerJsonString = json_encode($player);
-                break;
-            case 'file':
-                $players = json_decode($this->getPlayerDataFromFile($filename));
-                if (!$players) {
-                    $players = [];
-                }
-                $players[] = $player;
-                file_put_contents($filename, json_encode($players));
-                break;
-        }
-    }
-
-
-    function getPlayerDataArray() {
-
-        $players = [];
+        $players = null;
 
         $jonas = new \stdClass();
         $jonas->name = 'Jonas Valenciunas';
@@ -129,22 +74,58 @@ class PlayersObject implements IReadWritePlayers {
         $players[] = $jakob;
 
         return $players;
-
     }
 
-    function getPlayerDataJson() {
+    function writePlayer( $player, $filename = null){
+        $this->playersArray[] = $player;
+    }
+}
+
+class JsonDataSource implements IRead, IWrite {
+    private $playerJsonString;
+    function readPlayers( $filename = null)
+    {
         $json = '[{"name":"Jonas Valenciunas","age":26,"job":"Center","salary":"4.66m"},{"name":"Kyle Lowry","age":32,"job":"Point Guard","salary":"28.7m"},{"name":"Demar DeRozan","age":28,"job":"Shooting Guard","salary":"26.54m"},{"name":"Jakob Poeltl","age":22,"job":"Center","salary":"2.704m"}]';
-        return $json;
+        return json_decode($json);
+        
     }
 
-    function getPlayerDataFromFile($filename) {
+    function writePlayer( $player, $filename = null){
+        $players = [];
+        if ($this->playerJsonString) {
+            $players = json_decode($this->playerJsonString);
+        }
+        $players[] = $player;
+        $this->playerJsonString = json_encode($player);
+    }
+}
+
+class FileDataSource implements IRead, IWrite {
+    
+    function readPlayers( $filename = null)
+    {
         $file = file_get_contents($filename);
-        return $file;
+        return  json_decode($file);
     }
 
-    function display($isCLI, $source, $filename = null) {
+    function writePlayer( $player, $filename = null){
+        $players = json_decode($this->readPlayers($filename));
+        if (!$players) {
+            $players = [];
+        }
+        $players[] = $player;
+        file_put_contents($filename, json_encode($players));
+    }
 
-        $players = $this->readPlayers($source, $filename);
+    
+}
+
+class DataDisplay implements IDisplay {
+
+    
+    function display($isCLI, $dataSource, $filename = null) {
+
+        $players = $dataSource->readPlayers( $filename);
 
         if ($isCLI) {
             echo "Current Players: \n";
@@ -194,8 +175,10 @@ class PlayersObject implements IReadWritePlayers {
 
 }
 
-$playersObject = new PlayersObject();
+$arrayDataSource = new ArrayDataSource();
 
-$playersObject->display(php_sapi_name() === 'cli', 'array');
+$dataDisplay = new DataDisplay();
+
+$dataDisplay->display(php_sapi_name() === 'cli', $arrayDataSource, "playerdata.json");
 
 ?>
